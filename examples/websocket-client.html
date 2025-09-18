@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Polling Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { margin-bottom: 20px; }
+        .poll-option { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+        .vote-count { font-weight: bold; color: #007bff; }
+        #messages { height: 300px; overflow-y: scroll; border: 1px solid #ddd; padding: 10px; background: #f9f9f9; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        input, select { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>Real-Time Polling Client</h1>
+    
+    <div class="container">
+        <h3>WebSocket Connection</h3>
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+        <span id="connectionStatus">Disconnected</span>
+    </div>
+
+    <div class="container">
+        <h3>Subscribe to Poll</h3>
+        <input type="text" id="pollIdInput" placeholder="Enter Poll ID" />
+        <button id="subscribeBtn" disabled>Subscribe</button>
+        <button id="unsubscribeBtn" disabled>Unsubscribe</button>
+    </div>
+
+    <div class="container">
+        <h3>Current Poll Data</h3>
+        <div id="pollData">No poll data available</div>
+    </div>
+
+    <div class="container">
+        <h3>WebSocket Messages</h3>
+        <div id="messages"></div>
+        <button id="clearBtn">Clear Messages</button>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentPollId = null;
+
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const subscribeBtn = document.getElementById('subscribeBtn');
+        const unsubscribeBtn = document.getElementById('unsubscribeBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const pollIdInput = document.getElementById('pollIdInput');
+        const messagesDiv = document.getElementById('messages');
+        const pollDataDiv = document.getElementById('pollData');
+        const clearBtn = document.getElementById('clearBtn');
+
+        function addMessage(message, type = 'info') {
+            const div = document.createElement('div');
+            div.style.marginBottom = '5px';
+            div.style.padding = '5px';
+            div.style.borderLeft = `3px solid ${type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#17a2b8'}`;
+            div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateConnectionStatus(status) {
+            connectionStatus.textContent = status;
+            connectionStatus.style.color = status === 'Connected' ? 'green' : 'red';
+        }
+
+        function updatePollData(poll) {
+            if (!poll) {
+                pollDataDiv.innerHTML = 'No poll data available';
+                return;
+            }
+
+            const html = `
+                <h4>${poll.question}</h4>
+                <p><strong>Total Votes:</strong> ${poll.totalVotes}</p>
+                ${poll.options.map(option => `
+                    <div class="poll-option">
+                        <strong>${option.text}</strong>
+                        <span class="vote-count">${option.voteCount} votes</span>
+                        <div style="width: 100%; background: #e0e0e0; height: 10px; border-radius: 5px; margin-top: 5px;">
+                            <div style="width: ${poll.totalVotes ? (option.voteCount / poll.totalVotes * 100) : 0}%; background: #007bff; height: 100%; border-radius: 5px;"></div>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            pollDataDiv.innerHTML = html;
+        }
+
+        connectBtn.addEventListener('click', () => {
+            ws = new WebSocket('ws://localhost:3000');
+
+            ws.onopen = () => {
+                updateConnectionStatus('Connected');
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                subscribeBtn.disabled = false;
+                addMessage('Connected to WebSocket server', 'success');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    switch (data.type) {
+                        case 'connected':
+                            addMessage(`Server: ${data.message}`, 'success');
+                            break;
+                        case 'subscribed':
+                            addMessage(`Subscribed to poll: ${data.pollId}`, 'success');
+                            currentPollId = data.pollId;
+                            unsubscribeBtn.disabled = false;
+                            break;
+                        case 'unsubscribed':
+                            addMessage(`Unsubscribed from poll: ${data.pollId}`, 'success');
+                            currentPollId = null;
+                            unsubscribeBtn.disabled = true;
+                            updatePollData(null);
+                            break;
+                        case 'pollUpdate':
+                            addMessage(`Poll update received for: ${data.pollId}`, 'info');
+                            updatePollData(data.poll);
+                            break;
+                        case 'error':
+                            addMessage(`Error: ${data.message}`, 'error');
+                            break;
+                        case 'pong':
+                            addMessage('Pong received', 'info');
+                            break;
+                        default:
+                            addMessage(`Unknown message: ${JSON.stringify(data)}`, 'info');
+                    }
+                } catch (error) {
+                    addMessage(`Failed to parse message: ${event.data}`, 'error');
+                }
+            };
+
+            ws.onclose = () => {
+                updateConnectionStatus('Disconnected');
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                subscribeBtn.disabled = true;
+                unsubscribeBtn.disabled = true;
+                addMessage('WebSocket connection closed', 'error');
+                currentPollId = null;
+                updatePollData(null);
+            };
+
+            ws.onerror = (error) => {
+                addMessage('WebSocket error occurred', 'error');
+            };
+        });
+
+        disconnectBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+            }
+        });
+
+        subscribeBtn.addEventListener('click', () => {
+            const pollId = pollIdInput.value.trim();
+            if (!pollId) {
+                addMessage('Please enter a poll ID', 'error');
+                return;
+            }
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'subscribe', pollId }));
+            } else {
+                addMessage('WebSocket not connected', 'error');
+            }
+        });
+
+        unsubscribeBtn.addEventListener('click', () => {
+            if (currentPollId && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'unsubscribe', pollId: currentPollId }));
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            messagesDiv.innerHTML = '';
+        });
+
+        // Ping every 30 seconds to keep connection alive
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

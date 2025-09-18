@@ -1,0 +1,51 @@
+{
+  "name": "real-time-polling-api",
+  "version": "1.0.0",
+  "description": "Real-time polling application API with WebSocket support",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:init": "node scripts/init-db.js",
+    "test": "playwright test",
+    "test:api": "node examples/api-test.js",
+    "deploy": "node scripts/deploy-production.js",
+    "deploy:docker": "node scripts/deploy-production.js --docker",
+    "monitor": "node scripts/monitor.js start",
+    "monitor:check": "node scripts/monitor.js check",
+    "monitor:report": "node scripts/monitor.js report",
+    "pm2:start": "pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "pm2 stop all",
+    "pm2:restart": "pm2 restart all",
+    "pm2:logs": "pm2 logs",
+    "docker:build": "docker build -t polling-api .",
+    "docker:run": "docker run -p 3000:3000 polling-api",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up -d",
+    "docker:prod:down": "docker-compose -f docker-compose.prod.yml down",
+    "docker:prod:logs": "docker-compose -f docker-compose.prod.yml logs -f"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0",
+    "axios": "^1.12.1",
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "validator": "^13.11.0",
+    "winston": "^3.11.0",
+    "ws": "^8.14.2",
+    "xss": "^1.0.14"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "nodemon": "^3.0.2",
+    "prisma": "^5.7.0"
+  }
+}
